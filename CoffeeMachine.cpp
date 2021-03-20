@@ -1,111 +1,150 @@
-#include <iostream>
+#include<iostream>
+#include "CoffeeMachine.h"
+#include "CoffeeMachineError.h"
 
-using namespace std;
+CoffeeMachine::CoffeeMachine(Ingredients ingredients) : m_container(ingredients) {
+	if (m_container.IsEmpty()) {
+		bool isCritical = true;
+		throw CoffeeMachineError("Coffee machine container is empty", isCritical);
+	}
+}
 
-class ICofeeMachine {
-public:
-    virtual ~ICofeeMachine() {};
-    virtual bool MakeAmericano() = 0;
-    virtual bool MakeLatte() = 0;
-};
+const Recipe& CoffeeMachine::NewRecipe() {
+	string recipeName;
+	Ingredients ingredients;
 
-class ICoffeeMachineRecipe {
-protected:
-    virtual ~ICoffeeMachineRecipe() {};
-    virtual void SetAmericanoRecipe() = 0;
-    virtual void SetLatteRecipe() = 0;
-};
+	cout << "Enter the custom recipe name: ";
+	cin >> recipeName;
+	cout << "Enter coffe quantity: ";
+	cin >> ingredients.coffee;
+	cout << "Enter water quantity: ";
+	cin >> ingredients.water;
+	cout << "Enter sugar quantity: ";
+	cin >> ingredients.sugar;
+	cout << "Enter milk quantity: ";
+	cin >> ingredients.milk;
 
-class CoffeeMachine : public ICofeeMachine, public ICoffeeMachineRecipe {
-public:
-    static const char DEFAULT_LOAD = 10;
+	if (recipeName == "" || ingredients.IsEmpty()) {
+		bool isCritical = false;
+		throw CoffeeMachineError("Wrong recipe. Rejected.", isCritical);
+	}
 
-    CoffeeMachine(char water = DEFAULT_LOAD, char sugar = DEFAULT_LOAD, char milk = DEFAULT_LOAD) :
-        m_totalWater(water),
-        m_totalSugar(sugar),
-        m_totalMilk(milk),
+	const Recipe* recipe = new Recipe(recipeName, ingredients);
 
-        m_shotWater(1),
-        m_shotSugar(1),
-        m_shotMilk(0) {
-    }
+	return *recipe;
+}
 
-    // Inherited via ICofeeMachine
-    virtual bool MakeAmericano() override {
-        cout << "Americano selected\n";
-        SetAmericanoRecipe();        
-        return Make();
+CoffeeMachine* CoffeeMachine::AddRecipe(const Recipe& recipe) {
+	try {
+		pair<string, const Recipe&> mapItem(recipe.name, recipe);
+		m_recipesMap.insert(mapItem);
+	} catch (CoffeeMachineError error) {
+		if (error.IsCritical()) {
+			cout << "Recipe Isn't added. Application will be unstable and should to shutdown.\n";
+			throw;
+		}
+		else {
+			cout << "Recipe Isn't added.\n";
+		}
+	}
 
-    }
-    virtual bool MakeLatte() override {
-        cout << "Latte selected\n";
-        SetLatteRecipe();
-        return Make();
-    }
+	return this;
+}
 
-protected:
-    // Inherited via ICoffeeMachineRecipe
-    virtual void SetAmericanoRecipe() override {
-        m_shotWater = 2;
-        m_shotSugar = 1;
-        m_shotMilk = 0;
-    }
-    virtual void SetLatteRecipe() override{
-        m_shotWater = 1;
-        m_shotSugar = 2;
-        m_shotMilk = 1;
-    }
+const Recipe& CoffeeMachine::GetRecipe(string name) {
+	string tmp = string(name);
 
-private:
-    bool isCanMake() {
-        return
-            m_totalWater >= m_shotWater &&
-            m_totalSugar >= m_shotSugar &&
-            m_totalMilk >= m_shotMilk;
-    }
+	try {
+		return m_recipesMap.at(tmp.c_str());
+	}
+	catch (out_of_range error) {
+		throw;
+	}
+}
 
-    bool Make() {
-        if (isCanMake()) {
-            m_totalWater -= m_shotWater;
-            m_totalSugar -= m_shotSugar;
-            m_totalMilk -= m_shotMilk;
+CoffeeMachine* CoffeeMachine::AskRecipeByName() {
+	string recipeName;
+	cout << "Select recipe by name: ";
+	cin >> recipeName;
 
-            PrintRecipy();
-            PrintCapacity();
+	SelectRecipe(recipeName);
 
-            return true;
-        }
+	return this;
+}
 
-        return false;
-    }
+void CoffeeMachine::SelectRecipe(string name) {
+	m_selectedRecipe = GetRecipe(name);
 
-    void PrintRecipy() {
-        cout << "One cup\t: [\twater:" << m_shotWater << ", \tsugar:" << m_shotSugar << ", \tmilk:" << m_shotMilk << endl;        
-    }
+	cout << "Recipe selected: " << name << endl;
+	PrintRecipe(m_selectedRecipe);
+}
 
-    void PrintCapacity() {
-        cout << "Capacity\t: [\twater:" << m_totalWater << ", \tsugar:" << m_totalSugar << ", \tmilk:" << m_totalMilk << endl;
-    }
+void CoffeeMachine::Make() {
+	const bool isCan = isCanMake();
+	if (isCan) {
+		m_container.coffee -= m_selectedRecipe.ingredients.coffee;
+		m_container.water -= m_selectedRecipe.ingredients.water;
+		m_container.sugar -= m_selectedRecipe.ingredients.sugar;
+		m_container.milk -= m_selectedRecipe.ingredients.milk;
+		PrintContainer();
+	} else {
+		bool isCritical = false;
+		PrintContainer();
+		throw CoffeeMachineError("Machine container haven't enough ingredients", isCritical);
+	}
+}
 
-    void PrintError() {
-        cout << "Not enough amount to make:\n";
-        PrintRecipy();
-        PrintCapacity();
-    }
+bool CoffeeMachine::isCanMake() const {
+	return
+		m_container.coffee >= m_selectedRecipe.ingredients.coffee &&
+		m_container.water >= m_selectedRecipe.ingredients.water &&
+		m_container.sugar >= m_selectedRecipe.ingredients.sugar &&
+		m_container.milk >= m_selectedRecipe.ingredients.milk;
+}
 
-private:
-    char m_totalWater;
-    char m_totalSugar;
-    char m_totalMilk;
+void CoffeeMachine::PrintRecipe(const Recipe& recipe) const {
+	try {
+		std::cout
+			<< "One cup of "
+			<< recipe.name
+			<< " needs coffee:"
+			<< recipe.ingredients.coffee
+			<< ", water:"
+			<< recipe.ingredients.water
+			<< ", sugar:"
+			<< recipe.ingredients.sugar
+			<< ", milk:"
+			<< recipe.ingredients.milk
+			<< std::endl;
+	} catch (runtime_error error) {
+		CoffeeMachineError coffeeError(error.what());
+		throw coffeeError;
+	}
+}
 
-    char m_shotWater;
-    char m_shotSugar;
-    char m_shotMilk;
-};
+CoffeeMachine* CoffeeMachine::PrintRecipes() {
+	for (auto const& it : m_recipesMap) {
+		PrintRecipe(it.second);
+	}
 
-int main() {
-    CoffeeMachine machine;
+	return this;
+}
 
-    machine.MakeAmericano();
-    machine.MakeLatte();
+void CoffeeMachine::PrintContainer() const {
+	std::cout
+		<< "Machine container ingredients is coffee:"
+		<< m_container.coffee
+		<< ", water:"
+		<< m_container.water
+		<< ", sugar:"
+		<< m_container.sugar
+		<< ", milk:"
+		<< m_container.milk
+		<< std::endl;
+}
+
+void CoffeeMachine::PrintError() const {
+	std::cout << "Not enough amount to make:\n";
+	PrintRecipe(m_selectedRecipe);
+	PrintContainer();
 }
